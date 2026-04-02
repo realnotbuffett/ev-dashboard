@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EV Weather Bot — Live Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4eb;
+    --muted: #8b8fa3;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --amber: #f59e0b;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--muted); }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .header-left .subtitle { color: var(--muted); font-size: 0.85rem; }
+  .header-right { text-align: right; font-size: 0.8rem; color: var(--muted); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .kpi .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+  .kpi .detail { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .kpi .value.green { color: var(--green); }
+  .kpi .value.red { color: var(--red); }
+  .kpi .value.blue { color: var(--blue); }
+  .kpi .value.amber { color: var(--amber); }
+  .kpi .value.purple { color: var(--purple); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .card.full { grid-column: 1 / -1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 6px 10px; border-bottom: 1px solid #1f2230; }
+  tr:hover td { background: rgba(59,130,246,0.05); }
+  .yes { color: var(--green); font-weight: 600; }
+  .no { color: var(--red); font-weight: 600; }
+  .edge-high { color: var(--green); }
+  .edge-med { color: var(--amber); }
+  .edge-low { color: var(--muted); }
+  .mono { font-family: 'Consolas', 'Courier New', monospace; }
+
+  .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 100px; margin-top: 12px; }
+  .bar-chart .bar { flex: 1; min-width: 14px; border-radius: 3px 3px 0 0; position: relative; transition: height 0.3s; cursor: pointer; }
+  .bar-chart .bar .tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; white-space: nowrap; z-index: 10; }
+  .bar-chart .bar:hover .tip { display: block; }
+
+  .cal-row { display: flex; align-items: center; margin-bottom: 6px; font-size: 0.8rem; }
+  .cal-row .bl { width: 55px; color: var(--muted); flex-shrink: 0; }
+  .cal-row .barbg { flex: 1; height: 18px; background: #1f2230; border-radius: 4px; overflow: hidden; position: relative; }
+  .cal-row .barfill { height: 100%; border-radius: 4px; }
+  .cal-row .target { position: absolute; top: 0; height: 100%; width: 2px; background: rgba(255,255,255,0.4); }
+  .cal-row .vl { width: 70px; text-align: right; font-size: 0.72rem; flex-shrink: 0; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 8px 16px; cursor: pointer; color: var(--muted); font-size: 0.82rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab.active { color: var(--text); border-bottom-color: var(--blue); }
+  .tab:hover { color: var(--text); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  #loading { margin: 80px auto; text-align: center; }
+  #loading .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading .msg { color: var(--muted); font-size: 0.9rem; }
+  #loading .err { color: var(--red); font-size: 0.85rem; margin-top: 12px; display: none; }
+
+  .refresh-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+  .refresh-btn:hover { color: var(--text); border-color: var(--blue); }
+  .auto-tag { font-size: 0.65rem; background: rgba(34,197,94,0.15); color: var(--green); padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+
+  .nav-links { display: flex; gap: 16px; margin-bottom: 16px; font-size: 0.8rem; }
+  .nav-links a { color: var(--muted); text-decoration: none; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a.active { color: var(--blue); border-bottom: 1px solid var(--blue); }
+</style>
+</head>
+<body>
+
+<div class="nav-links">
+  <a href="../">Sports Bets</a>
+  <a href="./" class="active">Weather Bot</a>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="msg">Loading weather bot data...</div>
+  <div class="err" id="load-error"></div>
+</div>
+
+<div id="dashboard" style="display:none;">
+  <div class="header">
+    <div class="header-left">
+      <h1>EV Weather Bot <span id="mode-badge" style="font-size:0.68rem;padding:3px 8px;border-radius:4px;margin-left:8px;"></span><span id="auto-tag"></span></h1>
+      <div class="subtitle" id="last-update"></div>
+    </div>
+    <div class="header-right">
+      <div id="data-range"></div>
+      <button class="refresh-btn" onclick="loadData()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="trades">Recent Trades</div>
+    <div class="tab" data-tab="cities">By City</div>
+    <div class="tab" data-tab="edge">Edge Analysis</div>
+    <div class="tab" data-tab="calibration">Calibration</div>
+    <div class="tab" data-tab="timeline">Timeline</div>
+  </div>
+
+  <div class="tab-content active" id="tab-trades">
+    <div class="card full">
+      <h2>Trade Log <span style="font-size:0.72rem;color:var(--muted);font-weight:400;">(most recent first)</span></h2>
+      <div style="overflow-x:auto;"><table><thead><tr>
+        <th>Time</th><th>City</th><th>Date</th><th>Bin</th><th>Side</th>
+        <th>Model P</th><th>Mkt $</th><th>Norm $</th><th>Edge</th>
+        <th>Bet</th><th>Limit</th><th>Status</th>
+      </tr></thead><tbody id="trade-tbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-cities">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Exposure by City</h2>
+        <div id="city-chart" class="bar-chart"></div>
+        <table style="margin-top:14px;"><thead><tr><th>City</th><th>Trades</th><th>YES</th><th>NO</th><th>Exposure</th><th>Avg Edge</th></tr></thead><tbody id="city-tbody"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Exposure by Target Date</h2>
+        <div id="date-chart" class="bar-chart"></div>
+        <table style="margin-top:14px;"><thead><tr><th>Date</th><th>Trades</th><th>Cities</th><th>Exposure</th><th>Avg Edge</th></tr></thead><tbody id="date-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-edge">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Edge Distribution</h2>
+        <div id="edge-hist" class="bar-chart" style="height:120px;"></div>
+        <table style="margin-top:14px;"><thead><tr><th>Metric</th><th>YES</th><th>NO</th><th>All</th></tr></thead><tbody id="edge-stats"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Model Prob vs Market Price</h2>
+        <canvas id="scatter" style="width:100%;height:220px;"></canvas>
+        <div style="margin-top:6px;font-size:0.7rem;color:var(--muted);">
+          <span style="color:var(--green);">&#9679;</span> YES &nbsp;
+          <span style="color:var(--red);">&#9679;</span> NO &nbsp; Diagonal = no edge
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-calibration">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Backtest Calibration (3yr)</h2>
+        <div id="cal-chart"></div>
+        <p style="font-size:0.7rem;color:var(--muted);margin-top:10px;">Bars = actual hit rate. White markers = perfect calibration target.</p>
+      </div>
+      <div class="card">
+        <h2>Per-City Forecast Accuracy</h2>
+        <div style="overflow-y:auto;max-height:420px;">
+          <table><thead><tr><th>City</th><th>RMSE</th><th>MAE</th><th>Bias</th><th>Brier</th><th>Grade</th></tr></thead><tbody id="acc-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-timeline">
+    <div class="card full">
+      <h2>Cumulative Exposure</h2>
+      <canvas id="timeline" style="width:100%;height:200px;"></canvas>
+    </div>
+    <div class="card full" style="margin-top:16px;">
+      <h2>Trades Per Run</h2>
+      <div id="runs-chart" class="bar-chart" style="height:100px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Data URL — relative path; served from the same directory on GitHub Pages
+const DATA_URL = 'weather_data.json';
+
+// ---- Backtest data (embedded from 3yr backtest) ----
+const CAL = [
+  {b:'0-5%',t:2.5,a:0.04,n:1767700},{b:'5-10%',t:7.5,a:3.35,n:64831},
+  {b:'10-20%',t:15,a:12.86,n:84414},{b:'20-30%',t:25,a:32.38,n:63340},
+  {b:'30-50%',t:40,a:44.01,n:14431},{b:'50-70%',t:60,a:50.0,n:4},
+];
+const ACC = [
+  {c:'Ankara',r:0.80,m:0.62,b:-0.05,br:0.0128},{c:'Atlanta',r:1.94,m:1.49,b:0.10,br:0.0149},
+  {c:'Austin',r:2.04,m:1.51,b:-0.08,br:0.0140},{c:'Beijing',r:1.08,m:0.82,b:-0.33,br:0.0121},
+  {c:'Buenos Aires',r:1.07,m:0.80,b:-0.32,br:0.0163},{c:'Chicago',r:1.82,m:1.39,b:-0.41,br:0.0112},
+  {c:'Chongqing',r:1.22,m:0.95,b:0.33,br:0.0155},{c:'Dallas',r:2.24,m:1.77,b:-0.73,br:0.0131},
+  {c:'Denver',r:2.48,m:1.79,b:-0.56,br:0.0124},{c:'Houston',r:1.88,m:1.46,b:-0.07,br:0.0146},
+  {c:'Istanbul',r:0.78,m:0.60,b:0.31,br:0.0144},{c:'London',r:0.68,m:0.53,b:-0.15,br:0.0148},
+  {c:'Los Angeles',r:2.17,m:1.73,b:0.17,br:0.0234},{c:'Madrid',r:0.72,m:0.55,b:-0.07,br:0.0142},
+  {c:'Mexico City',r:1.26,m:1.01,b:0.10,br:0.0239},{c:'Miami',r:1.50,m:1.18,b:-0.03,br:0.0188},
+  {c:'Milan',r:0.89,m:0.70,b:0.01,br:0.0162},{c:'Moscow',r:0.86,m:0.65,b:0.06,br:0.0098},
+  {c:'Munich',r:0.87,m:0.67,b:0.28,br:0.0142},{c:'NYC',r:1.97,m:1.53,b:0.01,br:0.0126},
+  {c:'Paris',r:0.79,m:0.61,b:-0.28,br:0.0138},{c:'San Francisco',r:2.39,m:1.80,b:0.30,br:0.0195},
+  {c:'Seattle',r:1.99,m:1.52,b:-0.22,br:0.0149},{c:'Seoul',r:2.07,m:1.63,b:-0.20,br:0.0148},
+  {c:'Shanghai',r:0.89,m:0.69,b:0.36,br:0.0135},{c:'Shenzhen',r:1.25,m:1.02,b:0.06,br:0.0195},
+  {c:'Singapore',r:0.97,m:0.79,b:-0.31,br:0.0312},{c:'Taipei',r:0.99,m:0.78,b:0.01,br:0.0185},
+  {c:'Tel Aviv',r:1.03,m:0.79,b:-0.44,br:0.0158},{c:'Tokyo',r:0.90,m:0.70,b:0.02,br:0.0147},
+  {c:'Chengdu',r:1.29,m:0.97,b:0.15,br:0.0158},{c:'Lucknow',r:0.96,m:0.73,b:-0.03,br:0.0178},
+  {c:'S\u00e3o Paulo',r:1.09,m:0.85,b:-0.11,br:0.0204},{c:'Wuhan',r:0.00,m:0.00,b:0.00,br:0.0000},
+];
+
+// ---- Render ----
+function renderDashboard(data) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  const rows = data.trades || [];
+  const active = rows.filter(r => r.status === 'posted' || r.status === 'simulated');
+  const hasLive = rows.some(r => r.dry_run === 'False');
+  const badge = document.getElementById('mode-badge');
+  badge.textContent = hasLive ? 'LIVE' : 'DRY RUN';
+  badge.style.background = hasLive ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)';
+  badge.style.color = hasLive ? 'var(--green)' : 'var(--amber)';
+
+  // Updated timestamp from JSON
+  if (data.updated_at) {
+    const d = new Date(data.updated_at);
+    document.getElementById('last-update').textContent = 'Last update: ' + d.toLocaleString();
+  }
+  document.getElementById('data-range').textContent = rows.length + ' entries';
+  document.getElementById('auto-tag').innerHTML = '<span class="auto-tag">LIVE</span>';
+
+  // KPI
+  const totExp = active.reduce((s,r) => s + (+r.bet_size || 0), 0);
+  const yesT = active.filter(r => r.side==='YES'), noT = active.filter(r => r.side==='NO');
+  const edges = active.map(r => +(r.edge || 0));
+  const avgE = edges.length ? edges.reduce((a,b)=>a+b,0)/edges.length : 0;
+  const maxE = edges.length ? Math.max(...edges) : 0;
+  const cities = new Set(active.map(r => r.city));
+  const dates = new Set(active.map(r => r.target_date));
+  const fail = rows.filter(r => r.status==='failed'||r.status==='rejected_post_only').length;
+
+  document.getElementById('kpi-grid').innerHTML = [
+    {l:'Total Trades',v:active.length,c:'blue',d:`${yesT.length} YES / ${noT.length} NO`},
+    {l:'Exposure',v:'$'+totExp.toFixed(2),c:'green',d:`${cities.size} cities`},
+    {l:'Avg Edge',v:(avgE*100).toFixed(1)+'%',c:'purple',d:`max ${(maxE*100).toFixed(1)}%`},
+    {l:'Dates',v:dates.size,c:'amber',d:[...dates].sort().join(', ')},
+    {l:'NO/YES',v:yesT.length?`${(noT.length/yesT.length).toFixed(1)}:1`:`${noT.length}:0`,c:'blue',d:`${(100*noT.length/Math.max(1,active.length)).toFixed(0)}% NO`},
+    {l:'Errors',v:fail,c:fail?'red':'green',d:fail?'check log':'all good'},
+  ].map(k=>`<div class="kpi"><div class="label">${k.l}</div><div class="value ${k.c}">${k.v}</div><div class="detail">${k.d}</div></div>`).join('');
+
+  // Trade table
+  const vis = [...rows].filter(r=>r.status!=='circuit_breaker').reverse().slice(0,300);
+  document.getElementById('trade-tbody').innerHTML = vis.map(r => {
+    const e = +(r.edge || 0), ec = e>.15?'edge-high':e>.08?'edge-med':'edge-low';
+    const sc = r.side==='YES'?'yes':'no';
+    const stc = r.status==='posted'?'var(--green)':r.status==='simulated'?'var(--amber)':'var(--red)';
+    const t = r.timestamp?new Date(r.timestamp):null;
+    const ts = t?`${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'';
+    const np = r.normalized_yes_price ? (+r.normalized_yes_price).toFixed(3) : '';
+    return `<tr><td class="mono">${ts}</td><td>${r.city||''}</td><td class="mono">${r.target_date||''}</td><td class="mono">${r.bin_label||''}</td><td class="${sc}">${r.side||''}</td><td class="mono">${(+(r.model_prob||0)).toFixed(3)}</td><td class="mono">${(+(r.market_yes_price||0)).toFixed(3)}</td><td class="mono">${np}</td><td class="mono ${ec}">${(e*100).toFixed(1)}%</td><td class="mono">$${(+(r.bet_size||0)).toFixed(2)}</td><td class="mono">$${(+(r.limit_price||0)).toFixed(3)}</td><td style="color:${stc}">${r.status||''}</td></tr>`;
+  }).join('');
+
+  // City breakdown
+  const cm = {};
+  active.forEach(r => {
+    const c = r.city||'?';
+    if(!cm[c]) cm[c]={n:0,y:0,no:0,exp:0,eg:[]};
+    cm[c].n++; if(r.side==='YES')cm[c].y++;else cm[c].no++;
+    cm[c].exp += +(r.bet_size||0); cm[c].eg.push(+(r.edge||0));
+  });
+  const cs = Object.entries(cm).sort((a,b)=>b[1].exp-a[1].exp);
+  const mce = cs.length?Math.max(...cs.map(([,v])=>v.exp)):1;
+  document.getElementById('city-chart').innerHTML = cs.map(([c,d])=>{
+    const h=Math.max(4,d.exp/mce*100);
+    return `<div class="bar" style="height:${h}%;background:var(--blue);"><div class="tip">${c}: $${d.exp.toFixed(2)}</div></div>`;
+  }).join('');
+  document.getElementById('city-tbody').innerHTML = cs.map(([c,d])=>{
+    const ae=d.eg.reduce((a,b)=>a+b,0)/d.eg.length;
+    return `<tr><td>${c}</td><td>${d.n}</td><td class="yes">${d.y}</td><td class="no">${d.no}</td><td class="mono">$${d.exp.toFixed(2)}</td><td class="mono">${(ae*100).toFixed(1)}%</td></tr>`;
+  }).join('');
+
+  // Date breakdown
+  const dm = {};
+  active.forEach(r => {
+    const d=r.target_date||'?';
+    if(!dm[d]) dm[d]={n:0,cs:new Set(),exp:0,eg:[]};
+    dm[d].n++; dm[d].cs.add(r.city); dm[d].exp += +(r.bet_size||0); dm[d].eg.push(+(r.edge||0));
+  });
+  const ds = Object.entries(dm).sort((a,b)=>a[0].localeCompare(b[0]));
+  const mde = ds.length?Math.max(...ds.map(([,v])=>v.exp)):1;
+  document.getElementById('date-chart').innerHTML = ds.map(([dt,d])=>{
+    const h=Math.max(4,d.exp/mde*100);
+    return `<div class="bar" style="height:${h}%;background:var(--purple);"><div class="tip">${dt}: $${d.exp.toFixed(2)}</div></div>`;
+  }).join('');
+  document.getElementById('date-tbody').innerHTML = ds.map(([dt,d])=>{
+    const ae=d.eg.reduce((a,b)=>a+b,0)/d.eg.length;
+    return `<tr><td class="mono">${dt}</td><td>${d.n}</td><td>${d.cs.size}</td><td class="mono">$${d.exp.toFixed(2)}</td><td class="mono">${(ae*100).toFixed(1)}%</td></tr>`;
+  }).join('');
+
+  // Edge histogram
+  const eb=[0,.04,.06,.08,.10,.12,.15,.20,.30,.50], eh=new Array(eb.length).fill(0);
+  edges.forEach(e=>{for(let i=eb.length-1;i>=0;i--){if(e>=eb[i]){eh[i]++;break;}}});
+  const mh=Math.max(1,...eh);
+  document.getElementById('edge-hist').innerHTML = eh.map((c,i)=>{
+    const h=Math.max(2,c/mh*100);
+    const l=i<eb.length-1?`${(eb[i]*100).toFixed(0)}-${(eb[i+1]*100).toFixed(0)}%`:`${(eb[i]*100).toFixed(0)}%+`;
+    return `<div class="bar" style="height:${h}%;background:${i<3?'var(--amber)':'var(--green)'};"><div class="tip">${l}: ${c}</div></div>`;
+  }).join('');
+
+  // Edge stats
+  function es(a){if(!a.length)return{avg:0,med:0,mx:0,n:0};const s=[...a].sort((x,y)=>x-y);return{avg:a.reduce((x,y)=>x+y,0)/a.length,med:s[Math.floor(s.length/2)],mx:Math.max(...a),n:a.length};}
+  const ye=yesT.map(r=>+(r.edge||0)),ne=noT.map(r=>+(r.edge||0));
+  const ys=es(ye),ns=es(ne),as_=es(edges);
+  document.getElementById('edge-stats').innerHTML = [
+    ['Count',ys.n,ns.n,as_.n],
+    ['Average',(ys.avg*100).toFixed(1)+'%',(ns.avg*100).toFixed(1)+'%',(as_.avg*100).toFixed(1)+'%'],
+    ['Median',(ys.med*100).toFixed(1)+'%',(ns.med*100).toFixed(1)+'%',(as_.med*100).toFixed(1)+'%'],
+    ['Max',(ys.mx*100).toFixed(1)+'%',(ns.mx*100).toFixed(1)+'%',(as_.mx*100).toFixed(1)+'%'],
+  ].map(([m,y,n,a])=>`<tr><td>${m}</td><td class="mono">${y}</td><td class="mono">${n}</td><td class="mono">${a}</td></tr>`).join('');
+
+  // Scatter
+  drawScatter(active);
+
+  // Calibration — use backtest data from JSON if available, otherwise embedded
+  const calData = (data.calibration && data.calibration.length) ? data.calibration.map(d => ({
+    b: d.bucket || d.b || '',
+    t: +(d.target || d.t || 0),
+    a: +(d.actual || d.a || 0),
+    n: +(d.count || d.n || 0),
+  })) : CAL;
+  document.getElementById('cal-chart').innerHTML = calData.map(d=>{
+    const mx=50,aw=Math.min(100,d.a/mx*100),tp=Math.min(100,d.t/mx*100);
+    const col=Math.abs(d.a-d.t)<5?'var(--green)':Math.abs(d.a-d.t)<10?'var(--amber)':'var(--red)';
+    return `<div class="cal-row"><div class="bl">${d.b}</div><div class="barbg"><div class="barfill" style="width:${aw}%;background:${col};"></div><div class="target" style="left:${tp}%;"></div></div><div class="vl">${d.a.toFixed(1)}% <span style="color:var(--muted)">(${(d.n/1000).toFixed(0)}k)</span></div></div>`;
+  }).join('');
+
+  // Accuracy — use backtest data from JSON if available, otherwise embedded
+  const accData = (data.backtest && data.backtest.length) ? data.backtest.map(d => ({
+    c: d.city || d.c || '',
+    r: +(d.rmse || d.r || 0),
+    m: +(d.mae || d.m || 0),
+    b: +(d.bias || d.b || 0),
+    br: +(d.brier_score || d.br || 0),
+    g: d.grade || 'A',
+  })) : ACC.map(d => ({...d, g: 'A'}));
+  document.getElementById('acc-tbody').innerHTML = accData.sort((a,b)=>a.br-b.br).map(d=>{
+    const bc=Math.abs(d.b)>.4?'var(--red)':Math.abs(d.b)>.2?'var(--amber)':'var(--green)';
+    return `<tr><td>${d.c}</td><td class="mono">${d.r.toFixed(2)}</td><td class="mono">${d.m.toFixed(2)}</td><td class="mono" style="color:${bc}">${d.b>0?'+':''}${d.b.toFixed(2)}</td><td class="mono">${d.br.toFixed(4)}</td><td style="color:var(--green);font-weight:600;">${d.g}</td></tr>`;
+  }).join('');
+
+  // Timeline
+  drawTimeline(active);
+
+  // Runs
+  const runs={};
+  rows.forEach(r=>{if(!r.timestamp)return;const t=new Date(r.timestamp);const k=`${t.getMonth()+1}/${t.getDate()} ${t.getHours()}:${String(Math.floor(t.getMinutes()/10)*10).padStart(2,'0')}`;if(!runs[k])runs[k]=0;if(r.status==='posted'||r.status==='simulated')runs[k]++;});
+  const re=Object.entries(runs).filter(([,v])=>v>0);
+  const mr=Math.max(1,...re.map(([,v])=>v));
+  document.getElementById('runs-chart').innerHTML = re.map(([k,c])=>{
+    const h=Math.max(4,c/mr*100);
+    return `<div class="bar" style="height:${h}%;background:var(--cyan);"><div class="tip">${k}: ${c}</div></div>`;
+  }).join('');
+}
+
+function drawScatter(trades) {
+  const c=document.getElementById('scatter');if(!c)return;
+  c.width=c.parentElement.clientWidth;c.height=220;
+  const ctx=c.getContext('2d'),w=c.width,h=c.height,p=30;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(p,h-p);ctx.lineTo(w-p,p);ctx.stroke();
+  ctx.fillStyle='#8b8fa3';ctx.font='10px sans-serif';
+  ctx.fillText('Market Price',w/2-25,h-4);
+  trades.forEach(r=>{
+    const mp=+(r.market_yes_price||0),pp=+(r.model_prob||0);
+    const x=p+mp*(w-2*p),y=(h-p)-pp*(h-2*p);
+    ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle=r.side==='YES'?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)';ctx.fill();
+  });
+}
+
+function drawTimeline(trades) {
+  const c=document.getElementById('timeline');if(!c||!trades.length)return;
+  c.width=c.parentElement.clientWidth;c.height=200;
+  const ctx=c.getContext('2d'),w=c.width,h=c.height,p=35;
+  const sorted=[...trades].filter(r=>r.timestamp).sort((a,b)=>a.timestamp.localeCompare(b.timestamp));
+  if(!sorted.length)return;
+  let cum=0;const pts=sorted.map(r=>{cum+=+(r.bet_size||0);return{t:new Date(r.timestamp),c:cum};});
+  const t0=pts[0].t.getTime(),t1=pts[pts.length-1].t.getTime(),tr=t1-t0||1,mc=cum||1;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.05)';
+  for(let i=0;i<=4;i++){const y=p+(h-2*p)*i/4;ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();}
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2;ctx.beginPath();
+  pts.forEach((pt,i)=>{const x=p+((pt.t.getTime()-t0)/tr)*(w-2*p),y=(h-p)-(pt.c/mc)*(h-2*p);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.stroke();
+  ctx.fillStyle='#8b8fa3';ctx.font='10px sans-serif';
+  ctx.fillText('$'+mc.toFixed(0),2,p+4);ctx.fillText('$0',2,h-p+4);
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+});});
+
+// Load data from JSON
+function loadData() {
+  fetch(DATA_URL + '?t=' + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => renderDashboard(data))
+    .catch(err => {
+      console.error('Failed to load data:', err);
+      const errEl = document.getElementById('load-error');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'Failed to load data. The bot may not have published yet.';
+      }
+    });
+}
+
+// Initial load + auto-refresh every 5 minutes
+loadData();
+setInterval(loadData, 300000);
+</script>
+</body>
+</html>
