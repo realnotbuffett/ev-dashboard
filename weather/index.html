@@ -35,7 +35,7 @@
   .header-left .subtitle { color: var(--muted); font-size: 0.85rem; }
   .header-right { text-align: right; font-size: 0.8rem; color: var(--muted); }
 
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .kpi .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .kpi .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
@@ -45,8 +45,11 @@
   .kpi .value.blue { color: var(--blue); }
   .kpi .value.amber { color: var(--amber); }
   .kpi .value.purple { color: var(--purple); }
+  .kpi .value.cyan { color: var(--cyan); }
 
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr; } }
   @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
   .card.full { grid-column: 1 / -1; }
@@ -57,6 +60,9 @@
   tr:hover td { background: rgba(59,130,246,0.05); }
   .yes { color: var(--green); font-weight: 600; }
   .no { color: var(--red); font-weight: 600; }
+  .win { color: var(--green); }
+  .loss { color: var(--red); }
+  .pending-status { color: var(--amber); }
   .edge-high { color: var(--green); }
   .edge-med { color: var(--amber); }
   .edge-low { color: var(--muted); }
@@ -74,8 +80,14 @@
   .cal-row .target { position: absolute; top: 0; height: 100%; width: 2px; background: rgba(255,255,255,0.4); }
   .cal-row .vl { width: 70px; text-align: right; font-size: 0.72rem; flex-shrink: 0; }
 
-  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab { padding: 8px 16px; cursor: pointer; color: var(--muted); font-size: 0.82rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .pnl-bar { display: flex; align-items: center; margin-bottom: 4px; font-size: 0.78rem; }
+  .pnl-bar .city-label { width: 100px; color: var(--muted); flex-shrink: 0; text-align: right; padding-right: 10px; }
+  .pnl-bar .bar-area { flex: 1; height: 20px; position: relative; }
+  .pnl-bar .bar-fill { height: 100%; border-radius: 3px; position: absolute; top: 0; }
+  .pnl-bar .bar-val { position: absolute; top: 1px; font-size: 0.7rem; font-weight: 600; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { padding: 8px 16px; cursor: pointer; color: var(--muted); font-size: 0.82rem; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
   .tab.active { color: var(--text); border-bottom-color: var(--blue); }
   .tab:hover { color: var(--text); }
   .tab-content { display: none; }
@@ -89,12 +101,17 @@
 
   .refresh-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
   .refresh-btn:hover { color: var(--text); border-color: var(--blue); }
-  .auto-tag { font-size: 0.65rem; background: rgba(34,197,94,0.15); color: var(--green); padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
 
   .nav-links { display: flex; gap: 16px; margin-bottom: 16px; font-size: 0.8rem; }
   .nav-links a { color: var(--muted); text-decoration: none; }
   .nav-links a:hover { color: var(--text); }
   .nav-links a.active { color: var(--blue); border-bottom: 1px solid var(--blue); }
+
+  .stat-pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+  .pill-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .pill-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .pill-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .pill-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
 </style>
 </head>
 <body>
@@ -113,7 +130,7 @@
 <div id="dashboard" style="display:none;">
   <div class="header">
     <div class="header-left">
-      <h1>EV Weather Bot <span id="mode-badge" style="font-size:0.68rem;padding:3px 8px;border-radius:4px;margin-left:8px;"></span><span id="auto-tag"></span></h1>
+      <h1>EV Weather Bot <span id="mode-badge" style="font-size:0.68rem;padding:3px 8px;border-radius:4px;margin-left:8px;"></span></h1>
       <div class="subtitle" id="last-update"></div>
     </div>
     <div class="header-right">
@@ -125,30 +142,61 @@
   <div class="kpi-grid" id="kpi-grid"></div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="trades">Recent Trades</div>
+    <div class="tab active" data-tab="pnl">P&L</div>
+    <div class="tab" data-tab="trades">Trades</div>
     <div class="tab" data-tab="cities">By City</div>
     <div class="tab" data-tab="edge">Edge Analysis</div>
+    <div class="tab" data-tab="fillrate">Fill Rate</div>
     <div class="tab" data-tab="calibration">Calibration</div>
-    <div class="tab" data-tab="timeline">Timeline</div>
+    <div class="tab" data-tab="runs">Run History</div>
   </div>
 
-  <div class="tab-content active" id="tab-trades">
+  <!-- P&L TAB -->
+  <div class="tab-content active" id="tab-pnl">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Cumulative P&L</h2>
+        <canvas id="pnl-chart" style="width:100%;height:220px;"></canvas>
+      </div>
+      <div class="card">
+        <h2>P&L by City</h2>
+        <div id="pnl-city-bars"></div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Daily P&L</h2>
+        <div id="daily-pnl-chart" class="bar-chart" style="height:120px;"></div>
+        <table style="margin-top:14px;"><thead><tr><th>Date</th><th>Trades</th><th>W</th><th>L</th><th>Win%</th><th>P&L</th></tr></thead><tbody id="daily-pnl-tbody"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Resolved Trades</h2>
+        <div style="overflow-y:auto;max-height:380px;">
+          <table><thead><tr><th>City</th><th>Date</th><th>Bin</th><th>Side</th><th>Edge</th><th>Actual</th><th>Result</th><th>P&L</th></tr></thead><tbody id="resolved-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADES TAB -->
+  <div class="tab-content" id="tab-trades">
     <div class="card full">
       <h2>Trade Log <span style="font-size:0.72rem;color:var(--muted);font-weight:400;">(most recent first)</span></h2>
       <div style="overflow-x:auto;"><table><thead><tr>
         <th>Time</th><th>City</th><th>Date</th><th>Bin</th><th>Side</th>
-        <th>Model P</th><th>Mkt $</th><th>Norm $</th><th>Edge</th>
-        <th>Bet</th><th>Limit</th><th>Status</th>
+        <th>Model P</th><th>Mkt $</th><th>Edge</th>
+        <th>Bet</th><th>Result</th><th>P&L</th><th>Status</th>
       </tr></thead><tbody id="trade-tbody"></tbody></table></div>
     </div>
   </div>
 
+  <!-- CITIES TAB -->
   <div class="tab-content" id="tab-cities">
     <div class="grid-2">
       <div class="card">
         <h2>Exposure by City</h2>
         <div id="city-chart" class="bar-chart"></div>
-        <table style="margin-top:14px;"><thead><tr><th>City</th><th>Trades</th><th>YES</th><th>NO</th><th>Exposure</th><th>Avg Edge</th></tr></thead><tbody id="city-tbody"></tbody></table>
+        <table style="margin-top:14px;"><thead><tr><th>City</th><th>Trades</th><th>YES</th><th>NO</th><th>Exposure</th><th>Avg Edge</th><th>P&L</th></tr></thead><tbody id="city-tbody"></tbody></table>
       </div>
       <div class="card">
         <h2>Exposure by Target Date</h2>
@@ -158,6 +206,7 @@
     </div>
   </div>
 
+  <!-- EDGE TAB -->
   <div class="tab-content" id="tab-edge">
     <div class="grid-2">
       <div class="card">
@@ -176,6 +225,25 @@
     </div>
   </div>
 
+  <!-- FILL RATE TAB -->
+  <div class="tab-content" id="tab-fillrate">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Maker Order Fill Rate</h2>
+        <div id="fill-kpis" style="margin-bottom:16px;"></div>
+        <canvas id="fill-chart" style="width:100%;height:180px;"></canvas>
+        <p style="font-size:0.72rem;color:var(--muted);margin-top:10px;">Fill rate = orders matched by takers / total orders placed. Maker strategy: zero fees, but not all orders fill.</p>
+      </div>
+      <div class="card">
+        <h2>Fill Rate vs Edge</h2>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">Are higher-edge orders more or less likely to fill? Helps decide taker vs maker cutoff.</p>
+        <canvas id="fill-edge-scatter" style="width:100%;height:200px;"></canvas>
+        <div id="fill-recommendation" style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;font-size:0.8rem;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALIBRATION TAB -->
   <div class="tab-content" id="tab-calibration">
     <div class="grid-2">
       <div class="card">
@@ -192,23 +260,20 @@
     </div>
   </div>
 
-  <div class="tab-content" id="tab-timeline">
+  <!-- RUNS TAB -->
+  <div class="tab-content" id="tab-runs">
     <div class="card full">
-      <h2>Cumulative Exposure</h2>
-      <canvas id="timeline" style="width:100%;height:200px;"></canvas>
-    </div>
-    <div class="card full" style="margin-top:16px;">
-      <h2>Trades Per Run</h2>
-      <div id="runs-chart" class="bar-chart" style="height:100px;"></div>
+      <h2>Run History</h2>
+      <div id="runs-chart" class="bar-chart" style="height:120px;"></div>
+      <table style="margin-top:14px;"><thead><tr><th>Run Time</th><th>Mode</th><th>Trades</th><th>YES</th><th>NO</th><th>Exposure</th><th>Errors</th></tr></thead><tbody id="runs-tbody"></tbody></table>
     </div>
   </div>
 </div>
 
 <script>
-// Data URL — relative path; served from the same directory on GitHub Pages
 const DATA_URL = 'weather_data.json';
 
-// ---- Backtest data (embedded from 3yr backtest) ----
+// Embedded backtest data (fallback if not in JSON)
 const CAL = [
   {b:'0-5%',t:2.5,a:0.04,n:1767700},{b:'5-10%',t:7.5,a:3.35,n:64831},
   {b:'10-20%',t:15,a:12.86,n:84414},{b:'20-30%',t:25,a:32.38,n:63340},
@@ -234,59 +299,196 @@ const ACC = [
   {c:'S\u00e3o Paulo',r:1.09,m:0.85,b:-0.11,br:0.0204},{c:'Wuhan',r:0.00,m:0.00,b:0.00,br:0.0000},
 ];
 
-// ---- Render ----
 function renderDashboard(data) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 
   const rows = data.trades || [];
-  const active = rows.filter(r => r.status === 'posted' || r.status === 'simulated');
-  const hasLive = rows.some(r => r.dry_run === 'False');
+  const pnl = data.pnl || {};
+  const pnlByCity = data.pnl_by_city || {};
+  const pnlByDate = data.pnl_by_date || {};
+  const pnlTimeline = data.pnl_timeline || [];
+  const fillStats = data.fill_stats || {};
+  const runsData = data.runs || [];
+  const allActive = rows.filter(r => r.status === 'posted' || r.status === 'simulated');
+  const liveRows = rows.filter(r => r.dry_run === 'False' && r.status === 'posted');
+  const hasLive = liveRows.length > 0;
+
+  // Mode badge
   const badge = document.getElementById('mode-badge');
   badge.textContent = hasLive ? 'LIVE' : 'DRY RUN';
   badge.style.background = hasLive ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)';
   badge.style.color = hasLive ? 'var(--green)' : 'var(--amber)';
 
-  // Updated timestamp from JSON
   if (data.updated_at) {
-    const d = new Date(data.updated_at);
-    document.getElementById('last-update').textContent = 'Last update: ' + d.toLocaleString();
+    document.getElementById('last-update').textContent = 'Last update: ' + new Date(data.updated_at).toLocaleString();
   }
-  document.getElementById('data-range').textContent = rows.length + ' entries';
-  document.getElementById('auto-tag').innerHTML = '<span class="auto-tag">LIVE</span>';
+  document.getElementById('data-range').textContent = allActive.length + ' trades across ' + (data.summary?.cities || 0) + ' cities';
 
-  // KPI
-  const totExp = active.reduce((s,r) => s + (+r.bet_size || 0), 0);
-  const yesT = active.filter(r => r.side==='YES'), noT = active.filter(r => r.side==='NO');
-  const edges = active.map(r => +(r.edge || 0));
+  // ===== KPI GRID =====
+  const totalPnl = pnl.total_pnl || 0;
+  const winRate = pnl.win_rate;
+  const roi = pnl.roi;
+  const resolved = pnl.resolved || 0;
+  const pending = pnl.pending || 0;
+  const wins = pnl.wins || 0;
+  const losses = pnl.losses || 0;
+  const totExp = allActive.reduce((s,r) => s + (+r.bet_size || 0), 0);
+  const yesT = allActive.filter(r => r.side==='YES');
+  const noT = allActive.filter(r => r.side==='NO');
+  const edges = allActive.map(r => +(r.edge || 0));
   const avgE = edges.length ? edges.reduce((a,b)=>a+b,0)/edges.length : 0;
   const maxE = edges.length ? Math.max(...edges) : 0;
-  const cities = new Set(active.map(r => r.city));
-  const dates = new Set(active.map(r => r.target_date));
-  const fail = rows.filter(r => r.status==='failed'||r.status==='rejected_post_only').length;
 
   document.getElementById('kpi-grid').innerHTML = [
-    {l:'Total Trades',v:active.length,c:'blue',d:`${yesT.length} YES / ${noT.length} NO`},
-    {l:'Exposure',v:'$'+totExp.toFixed(2),c:'green',d:`${cities.size} cities`},
-    {l:'Avg Edge',v:(avgE*100).toFixed(1)+'%',c:'purple',d:`max ${(maxE*100).toFixed(1)}%`},
-    {l:'Dates',v:dates.size,c:'amber',d:[...dates].sort().join(', ')},
-    {l:'NO/YES',v:yesT.length?`${(noT.length/yesT.length).toFixed(1)}:1`:`${noT.length}:0`,c:'blue',d:`${(100*noT.length/Math.max(1,active.length)).toFixed(0)}% NO`},
-    {l:'Errors',v:fail,c:fail?'red':'green',d:fail?'check log':'all good'},
-  ].map(k=>`<div class="kpi"><div class="label">${k.l}</div><div class="value ${k.c}">${k.v}</div><div class="detail">${k.d}</div></div>`).join('');
+    {l:'Total P&L', v: (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2), c: totalPnl >= 0 ? 'green' : 'red', d: roi !== null ? `ROI: ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : 'No resolved trades'},
+    {l:'Win Rate', v: winRate !== null ? winRate.toFixed(1) + '%' : '--', c: winRate !== null && winRate >= 50 ? 'green' : winRate !== null ? 'amber' : 'blue', d: `${wins}W / ${losses}L` + (pending > 0 ? ` / ${pending} pending` : '')},
+    {l:'Total Trades', v: allActive.length, c: 'blue', d: `${yesT.length} YES / ${noT.length} NO` + (hasLive ? ` (${liveRows.length} live)` : '')},
+    {l:'Exposure', v: '$' + totExp.toFixed(0), c: 'cyan', d: `${(data.summary?.cities || 0)} cities`},
+    {l:'Avg Edge', v: (avgE*100).toFixed(1) + '%', c: 'purple', d: `max ${(maxE*100).toFixed(1)}%`},
+    {l:'Resolved', v: resolved, c: resolved > 0 ? 'green' : 'amber', d: pending > 0 ? `${pending} pending` : 'all resolved'},
+  ].map(k => `<div class="kpi"><div class="label">${k.l}</div><div class="value ${k.c}">${k.v}</div><div class="detail">${k.d}</div></div>`).join('');
 
-  // Trade table
-  const vis = [...rows].filter(r=>r.status!=='circuit_breaker').reverse().slice(0,300);
+  // ===== P&L TAB =====
+  drawPnlChart(pnlTimeline);
+  renderPnlCityBars(pnlByCity);
+  renderDailyPnl(pnlByDate);
+  renderResolvedTrades(rows);
+
+  // ===== TRADES TAB =====
+  renderTradeTable(rows);
+
+  // ===== CITIES TAB =====
+  renderCityBreakdown(allActive, pnlByCity);
+
+  // ===== EDGE TAB =====
+  renderEdgeAnalysis(allActive, yesT, noT);
+
+  // ===== FILL RATE TAB =====
+  renderFillRate(data);
+
+  // ===== CALIBRATION TAB =====
+  renderCalibration(data);
+
+  // ===== RUNS TAB =====
+  renderRunHistory(runsData);
+}
+
+// ---- P&L Chart ----
+function drawPnlChart(timeline) {
+  const c = document.getElementById('pnl-chart');
+  if (!c || !timeline.length) {
+    if (c) { c.width = c.parentElement.clientWidth; c.height = 220; const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.fillStyle = '#8b8fa3'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('No resolved trades yet', c.width/2, 110); }
+    return;
+  }
+  c.width = c.parentElement.clientWidth; c.height = 220;
+  const ctx = c.getContext('2d'), w = c.width, h = c.height, p = 40;
+  ctx.clearRect(0,0,w,h);
+
+  const vals = timeline.map(t => t.cum_pnl);
+  const mn = Math.min(0, ...vals), mx = Math.max(0, ...vals);
+  const range = mx - mn || 1;
+
+  // Zero line
+  const zy = p + ((mx - 0) / range) * (h - 2*p);
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(p, zy); ctx.lineTo(w-p, zy); ctx.stroke(); ctx.setLineDash([]);
+
+  // P&L line
+  ctx.strokeStyle = vals[vals.length-1] >= 0 ? '#22c55e' : '#ef4444'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  timeline.forEach((t, i) => {
+    const x = p + (i / (timeline.length-1 || 1)) * (w - 2*p);
+    const y = p + ((mx - t.cum_pnl) / range) * (h - 2*p);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill under curve
+  const lastX = p + ((timeline.length-1) / (timeline.length-1 || 1)) * (w - 2*p);
+  ctx.lineTo(lastX, zy); ctx.lineTo(p, zy); ctx.closePath();
+  ctx.fillStyle = vals[vals.length-1] >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+  ctx.fill();
+
+  // Labels
+  ctx.fillStyle = '#8b8fa3'; ctx.font = '10px sans-serif';
+  ctx.fillText('$' + mx.toFixed(2), 2, p - 4);
+  ctx.fillText('$' + mn.toFixed(2), 2, h - p + 14);
+  ctx.fillText('$0', 2, zy - 4);
+
+  // Final value
+  ctx.fillStyle = vals[vals.length-1] >= 0 ? '#22c55e' : '#ef4444';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText((vals[vals.length-1] >= 0 ? '+$' : '-$') + Math.abs(vals[vals.length-1]).toFixed(2), w - 10, p - 4);
+  ctx.textAlign = 'left';
+}
+
+// ---- P&L by City Bars ----
+function renderPnlCityBars(pnlByCity) {
+  const el = document.getElementById('pnl-city-bars');
+  const entries = Object.entries(pnlByCity).sort((a,b) => b[1].pnl - a[1].pnl);
+  if (!entries.length) { el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No resolved trades yet</p>'; return; }
+  const maxAbs = Math.max(1, ...entries.map(([,v]) => Math.abs(v.pnl)));
+  el.innerHTML = entries.slice(0, 20).map(([city, d]) => {
+    const pct = Math.abs(d.pnl) / maxAbs * 45;
+    const isPos = d.pnl >= 0;
+    const col = isPos ? 'var(--green)' : 'var(--red)';
+    const wr = d.trades > 0 ? ((d.wins/d.trades)*100).toFixed(0) : 0;
+    return `<div class="pnl-bar"><div class="city-label">${city}</div><div class="bar-area"><div class="bar-fill" style="width:${pct}%;background:${col};${isPos ? 'left:50%' : 'right:50%'}"></div><div class="bar-val" style="color:${col};${isPos ? 'left:' + (52+pct) + '%' : 'right:' + (52+pct) + '%'}">${isPos?'+':''}$${d.pnl.toFixed(2)} (${wr}%)</div></div></div>`;
+  }).join('');
+}
+
+// ---- Daily P&L ----
+function renderDailyPnl(pnlByDate) {
+  const entries = Object.entries(pnlByDate);
+  if (!entries.length) { document.getElementById('daily-pnl-chart').innerHTML = ''; document.getElementById('daily-pnl-tbody').innerHTML = ''; return; }
+  const maxAbs = Math.max(1, ...entries.map(([,v]) => Math.abs(v.pnl)));
+  document.getElementById('daily-pnl-chart').innerHTML = entries.map(([dt, d]) => {
+    const h = Math.max(4, Math.abs(d.pnl)/maxAbs*100);
+    const col = d.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div class="bar" style="height:${h}%;background:${col};"><div class="tip">${dt}: ${d.pnl >= 0 ? '+' : ''}$${d.pnl.toFixed(2)}</div></div>`;
+  }).join('');
+  document.getElementById('daily-pnl-tbody').innerHTML = entries.map(([dt, d]) => {
+    const wr = d.trades > 0 ? ((d.wins/d.trades)*100).toFixed(0) : '--';
+    const pc = d.pnl >= 0 ? 'win' : 'loss';
+    return `<tr><td class="mono">${dt}</td><td>${d.trades}</td><td class="yes">${d.wins}</td><td class="no">${d.losses}</td><td>${wr}%</td><td class="mono ${pc}">${d.pnl >= 0 ? '+' : ''}$${d.pnl.toFixed(2)}</td></tr>`;
+  }).join('');
+}
+
+// ---- Resolved Trades Table ----
+function renderResolvedTrades(rows) {
+  const resolved = rows.filter(r => r.won !== null && r.won !== undefined);
+  document.getElementById('resolved-tbody').innerHTML = [...resolved].reverse().slice(0, 100).map(r => {
+    const won = r.won === true || r.won === 'true' || r.won === 'True';
+    const pnl = +(r.pnl || 0);
+    const rc = won ? 'win' : 'loss';
+    const e = +(r.edge || 0);
+    return `<tr><td>${r.city||''}</td><td class="mono">${r.target_date||''}</td><td class="mono">${r.bin_label||''}</td><td class="${r.side==='YES'?'yes':'no'}">${r.side||''}</td><td class="mono">${(e*100).toFixed(1)}%</td><td class="mono">${r.actual_temp !== null && r.actual_temp !== undefined ? r.actual_temp + '°' : '--'}</td><td class="${rc}">${won ? 'WIN' : 'LOSS'}</td><td class="mono ${rc}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td></tr>`;
+  }).join('');
+}
+
+// ---- Trade Table ----
+function renderTradeTable(rows) {
+  const vis = [...rows].filter(r => r.status !== 'circuit_breaker').reverse().slice(0, 300);
   document.getElementById('trade-tbody').innerHTML = vis.map(r => {
     const e = +(r.edge || 0), ec = e>.15?'edge-high':e>.08?'edge-med':'edge-low';
     const sc = r.side==='YES'?'yes':'no';
     const stc = r.status==='posted'?'var(--green)':r.status==='simulated'?'var(--amber)':'var(--red)';
-    const t = r.timestamp?new Date(r.timestamp):null;
-    const ts = t?`${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'';
-    const np = r.normalized_yes_price ? (+r.normalized_yes_price).toFixed(3) : '';
-    return `<tr><td class="mono">${ts}</td><td>${r.city||''}</td><td class="mono">${r.target_date||''}</td><td class="mono">${r.bin_label||''}</td><td class="${sc}">${r.side||''}</td><td class="mono">${(+(r.model_prob||0)).toFixed(3)}</td><td class="mono">${(+(r.market_yes_price||0)).toFixed(3)}</td><td class="mono">${np}</td><td class="mono ${ec}">${(e*100).toFixed(1)}%</td><td class="mono">$${(+(r.bet_size||0)).toFixed(2)}</td><td class="mono">$${(+(r.limit_price||0)).toFixed(3)}</td><td style="color:${stc}">${r.status||''}</td></tr>`;
+    const t = r.timestamp ? new Date(r.timestamp) : null;
+    const ts = t ? `${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}` : '';
+    const won = r.won;
+    const pnlVal = r.pnl !== null && r.pnl !== undefined ? +(r.pnl) : null;
+    const resC = won === true || won === 'true' || won === 'True' ? 'win' : won === false || won === 'false' || won === 'False' ? 'loss' : 'pending-status';
+    const resT = won === true || won === 'true' || won === 'True' ? 'WIN' : won === false || won === 'false' || won === 'False' ? 'LOSS' : '--';
+    const pnlT = pnlVal !== null ? `${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}` : '--';
+    const pnlC = pnlVal !== null ? (pnlVal >= 0 ? 'win' : 'loss') : '';
+    return `<tr><td class="mono">${ts}</td><td>${r.city||''}</td><td class="mono">${r.target_date||''}</td><td class="mono">${r.bin_label||''}</td><td class="${sc}">${r.side||''}</td><td class="mono">${(+(r.model_prob||0)).toFixed(3)}</td><td class="mono">${(+(r.market_yes_price||0)).toFixed(3)}</td><td class="mono ${ec}">${(e*100).toFixed(1)}%</td><td class="mono">$${(+(r.bet_size||0)).toFixed(2)}</td><td class="${resC}">${resT}</td><td class="mono ${pnlC}">${pnlT}</td><td style="color:${stc}">${r.status||''}</td></tr>`;
   }).join('');
+}
 
-  // City breakdown
+// ---- City Breakdown ----
+function renderCityBreakdown(active, pnlByCity) {
   const cm = {};
   active.forEach(r => {
     const c = r.city||'?';
@@ -302,7 +504,9 @@ function renderDashboard(data) {
   }).join('');
   document.getElementById('city-tbody').innerHTML = cs.map(([c,d])=>{
     const ae=d.eg.reduce((a,b)=>a+b,0)/d.eg.length;
-    return `<tr><td>${c}</td><td>${d.n}</td><td class="yes">${d.y}</td><td class="no">${d.no}</td><td class="mono">$${d.exp.toFixed(2)}</td><td class="mono">${(ae*100).toFixed(1)}%</td></tr>`;
+    const cp = pnlByCity[c];
+    const pnlStr = cp ? `<span class="${cp.pnl >= 0 ? 'win' : 'loss'}">${cp.pnl >= 0 ? '+' : ''}$${cp.pnl.toFixed(2)}</span>` : '--';
+    return `<tr><td>${c}</td><td>${d.n}</td><td class="yes">${d.y}</td><td class="no">${d.no}</td><td class="mono">$${d.exp.toFixed(2)}</td><td class="mono">${(ae*100).toFixed(1)}%</td><td class="mono">${pnlStr}</td></tr>`;
   }).join('');
 
   // Date breakdown
@@ -322,8 +526,11 @@ function renderDashboard(data) {
     const ae=d.eg.reduce((a,b)=>a+b,0)/d.eg.length;
     return `<tr><td class="mono">${dt}</td><td>${d.n}</td><td>${d.cs.size}</td><td class="mono">$${d.exp.toFixed(2)}</td><td class="mono">${(ae*100).toFixed(1)}%</td></tr>`;
   }).join('');
+}
 
-  // Edge histogram
+// ---- Edge Analysis ----
+function renderEdgeAnalysis(active, yesT, noT) {
+  const edges = active.map(r => +(r.edge || 0));
   const eb=[0,.04,.06,.08,.10,.12,.15,.20,.30,.50], eh=new Array(eb.length).fill(0);
   edges.forEach(e=>{for(let i=eb.length-1;i>=0;i--){if(e>=eb[i]){eh[i]++;break;}}});
   const mh=Math.max(1,...eh);
@@ -333,7 +540,6 @@ function renderDashboard(data) {
     return `<div class="bar" style="height:${h}%;background:${i<3?'var(--amber)':'var(--green)'};"><div class="tip">${l}: ${c}</div></div>`;
   }).join('');
 
-  // Edge stats
   function es(a){if(!a.length)return{avg:0,med:0,mx:0,n:0};const s=[...a].sort((x,y)=>x-y);return{avg:a.reduce((x,y)=>x+y,0)/a.length,med:s[Math.floor(s.length/2)],mx:Math.max(...a),n:a.length};}
   const ye=yesT.map(r=>+(r.edge||0)),ne=noT.map(r=>+(r.edge||0));
   const ys=es(ye),ns=es(ne),as_=es(edges);
@@ -346,46 +552,6 @@ function renderDashboard(data) {
 
   // Scatter
   drawScatter(active);
-
-  // Calibration — use backtest data from JSON if available, otherwise embedded
-  const calData = (data.calibration && data.calibration.length) ? data.calibration.map(d => ({
-    b: d.bucket || d.b || '',
-    t: +(d.target || d.t || 0),
-    a: +(d.actual || d.a || 0),
-    n: +(d.count || d.n || 0),
-  })) : CAL;
-  document.getElementById('cal-chart').innerHTML = calData.map(d=>{
-    const mx=50,aw=Math.min(100,d.a/mx*100),tp=Math.min(100,d.t/mx*100);
-    const col=Math.abs(d.a-d.t)<5?'var(--green)':Math.abs(d.a-d.t)<10?'var(--amber)':'var(--red)';
-    return `<div class="cal-row"><div class="bl">${d.b}</div><div class="barbg"><div class="barfill" style="width:${aw}%;background:${col};"></div><div class="target" style="left:${tp}%;"></div></div><div class="vl">${d.a.toFixed(1)}% <span style="color:var(--muted)">(${(d.n/1000).toFixed(0)}k)</span></div></div>`;
-  }).join('');
-
-  // Accuracy — use backtest data from JSON if available, otherwise embedded
-  const accData = (data.backtest && data.backtest.length) ? data.backtest.map(d => ({
-    c: d.city || d.c || '',
-    r: +(d.rmse || d.r || 0),
-    m: +(d.mae || d.m || 0),
-    b: +(d.bias || d.b || 0),
-    br: +(d.brier_score || d.br || 0),
-    g: d.grade || 'A',
-  })) : ACC.map(d => ({...d, g: 'A'}));
-  document.getElementById('acc-tbody').innerHTML = accData.sort((a,b)=>a.br-b.br).map(d=>{
-    const bc=Math.abs(d.b)>.4?'var(--red)':Math.abs(d.b)>.2?'var(--amber)':'var(--green)';
-    return `<tr><td>${d.c}</td><td class="mono">${d.r.toFixed(2)}</td><td class="mono">${d.m.toFixed(2)}</td><td class="mono" style="color:${bc}">${d.b>0?'+':''}${d.b.toFixed(2)}</td><td class="mono">${d.br.toFixed(4)}</td><td style="color:var(--green);font-weight:600;">${d.g}</td></tr>`;
-  }).join('');
-
-  // Timeline
-  drawTimeline(active);
-
-  // Runs
-  const runs={};
-  rows.forEach(r=>{if(!r.timestamp)return;const t=new Date(r.timestamp);const k=`${t.getMonth()+1}/${t.getDate()} ${t.getHours()}:${String(Math.floor(t.getMinutes()/10)*10).padStart(2,'0')}`;if(!runs[k])runs[k]=0;if(r.status==='posted'||r.status==='simulated')runs[k]++;});
-  const re=Object.entries(runs).filter(([,v])=>v>0);
-  const mr=Math.max(1,...re.map(([,v])=>v));
-  document.getElementById('runs-chart').innerHTML = re.map(([k,c])=>{
-    const h=Math.max(4,c/mr*100);
-    return `<div class="bar" style="height:${h}%;background:var(--cyan);"><div class="tip">${k}: ${c}</div></div>`;
-  }).join('');
 }
 
 function drawScatter(trades) {
@@ -405,50 +571,124 @@ function drawScatter(trades) {
   });
 }
 
-function drawTimeline(trades) {
-  const c=document.getElementById('timeline');if(!c||!trades.length)return;
-  c.width=c.parentElement.clientWidth;c.height=200;
-  const ctx=c.getContext('2d'),w=c.width,h=c.height,p=35;
-  const sorted=[...trades].filter(r=>r.timestamp).sort((a,b)=>a.timestamp.localeCompare(b.timestamp));
-  if(!sorted.length)return;
-  let cum=0;const pts=sorted.map(r=>{cum+=+(r.bet_size||0);return{t:new Date(r.timestamp),c:cum};});
-  const t0=pts[0].t.getTime(),t1=pts[pts.length-1].t.getTime(),tr=t1-t0||1,mc=cum||1;
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle='rgba(255,255,255,0.05)';
-  for(let i=0;i<=4;i++){const y=p+(h-2*p)*i/4;ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();}
-  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2;ctx.beginPath();
-  pts.forEach((pt,i)=>{const x=p+((pt.t.getTime()-t0)/tr)*(w-2*p),y=(h-p)-(pt.c/mc)*(h-2*p);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
-  ctx.stroke();
-  ctx.fillStyle='#8b8fa3';ctx.font='10px sans-serif';
-  ctx.fillText('$'+mc.toFixed(0),2,p+4);ctx.fillText('$0',2,h-p+4);
+// ---- Fill Rate ----
+function renderFillRate(data) {
+  const rows = data.trades || [];
+  const livePosted = rows.filter(r => r.dry_run === 'False' && r.status === 'posted');
+  const rejected = rows.filter(r => r.status === 'rejected_post_only');
+  const totalOrders = livePosted.length + rejected.length;
+
+  // For now, fill rate is estimated from what we know
+  // Full fill tracking requires order status polling (future enhancement)
+  const kpiEl = document.getElementById('fill-kpis');
+  kpiEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="kpi"><div class="label">Orders Placed</div><div class="value blue">${totalOrders}</div><div class="detail">${livePosted.length} posted, ${rejected.length} rejected</div></div>
+      <div class="kpi"><div class="label">PostOnly Rejections</div><div class="value ${rejected.length > 0 ? 'amber' : 'green'}">${rejected.length}</div><div class="detail">Would have been taker fills</div></div>
+      <div class="kpi"><div class="label">Strategy</div><div class="value green">MAKER</div><div class="detail">Zero fees + 25% rebate</div></div>
+    </div>
+  `;
+
+  // Fill chart placeholder
+  const c = document.getElementById('fill-chart');
+  if (c) {
+    c.width = c.parentElement.clientWidth; c.height = 180;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (totalOrders === 0) {
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Fill rate tracking will populate after live runs', c.width/2, 90);
+    } else {
+      // Draw a simple breakdown bar
+      const fillPct = livePosted.length / Math.max(1, totalOrders);
+      const rejPct = rejected.length / Math.max(1, totalOrders);
+      const bh = 40, by = 70;
+      ctx.fillStyle = 'var(--green)'; ctx.fillStyle = '#22c55e';
+      ctx.fillRect(40, by, fillPct * (c.width - 80), bh);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(40 + fillPct * (c.width - 80), by, rejPct * (c.width - 80), bh);
+      ctx.fillStyle = '#8b8fa3'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(`${livePosted.length} posted (${(fillPct*100).toFixed(0)}%)`, 40 + fillPct * (c.width - 80) / 2, by + bh/2 + 4);
+      ctx.fillText('Full fill rate tracking requires order status updates (coming soon)', c.width/2, by + bh + 30);
+    }
+  }
+
+  // Fill-edge scatter placeholder
+  const c2 = document.getElementById('fill-edge-scatter');
+  if (c2) {
+    c2.width = c2.parentElement.clientWidth; c2.height = 200;
+    const ctx = c2.getContext('2d');
+    ctx.clearRect(0, 0, c2.width, c2.height);
+    ctx.fillStyle = '#8b8fa3'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Fill-vs-edge analysis requires order fill data', c2.width/2, 90);
+    ctx.font = '11px sans-serif';
+    ctx.fillText('Will auto-populate after several live trading sessions', c2.width/2, 115);
+  }
+
+  // Recommendation
+  const recEl = document.getElementById('fill-recommendation');
+  if (totalOrders === 0) {
+    recEl.innerHTML = '<span style="color:var(--amber);">Waiting for live trading data to generate fill rate recommendations.</span>';
+  } else {
+    recEl.innerHTML = '<span style="color:var(--muted);">Collecting data... After 3-5 days of live runs, this section will recommend whether to add a taker fallback for high-edge trades.</span>';
+  }
 }
 
-// Tabs
-document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+// ---- Calibration ----
+function renderCalibration(data) {
+  const calData = (data.calibration && data.calibration.length) ? data.calibration.map(d => ({
+    b: d.bucket || d.b || '', t: +(d.target || d.t || 0), a: +(d.actual || d.a || 0), n: +(d.count || d.n || 0),
+  })) : CAL;
+  document.getElementById('cal-chart').innerHTML = calData.map(d=>{
+    const mx=50,aw=Math.min(100,d.a/mx*100),tp=Math.min(100,d.t/mx*100);
+    const col=Math.abs(d.a-d.t)<5?'var(--green)':Math.abs(d.a-d.t)<10?'var(--amber)':'var(--red)';
+    return `<div class="cal-row"><div class="bl">${d.b}</div><div class="barbg"><div class="barfill" style="width:${aw}%;background:${col};"></div><div class="target" style="left:${tp}%;"></div></div><div class="vl">${d.a.toFixed(1)}% <span style="color:var(--muted)">(${(d.n/1000).toFixed(0)}k)</span></div></div>`;
+  }).join('');
+
+  const accData = (data.backtest && data.backtest.length) ? data.backtest.map(d => ({
+    c: d.city || d.c || '', r: +(d.rmse || d.r || 0), m: +(d.mae || d.m || 0), b: +(d.bias || d.b || 0), br: +(d.brier_score || d.br || 0), g: d.grade || 'A',
+  })) : ACC.map(d => ({...d, g: 'A'}));
+  document.getElementById('acc-tbody').innerHTML = accData.sort((a,b)=>a.br-b.br).map(d=>{
+    const bc=Math.abs(d.b)>.4?'var(--red)':Math.abs(d.b)>.2?'var(--amber)':'var(--green)';
+    return `<tr><td>${d.c}</td><td class="mono">${d.r.toFixed(2)}</td><td class="mono">${d.m.toFixed(2)}</td><td class="mono" style="color:${bc}">${d.b>0?'+':''}${d.b.toFixed(2)}</td><td class="mono">${d.br.toFixed(4)}</td><td style="color:var(--green);font-weight:600;">${d.g}</td></tr>`;
+  }).join('');
+}
+
+// ---- Run History ----
+function renderRunHistory(runsData) {
+  if (!runsData.length) { document.getElementById('runs-chart').innerHTML = ''; document.getElementById('runs-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--muted);text-align:center;">No runs yet</td></tr>'; return; }
+  const mr = Math.max(1, ...runsData.map(r => r.trades));
+  document.getElementById('runs-chart').innerHTML = runsData.map(r => {
+    const h = Math.max(4, r.trades/mr*100);
+    const col = r.live ? 'var(--green)' : 'var(--cyan)';
+    return `<div class="bar" style="height:${h}%;background:${col};"><div class="tip">${r.time}: ${r.trades} trades</div></div>`;
+  }).join('');
+  document.getElementById('runs-tbody').innerHTML = [...runsData].reverse().map(r => {
+    const mode = r.live ? '<span class="stat-pill pill-green">LIVE</span>' : '<span class="stat-pill pill-amber">DRY</span>';
+    const errC = r.errors > 0 ? 'style="color:var(--red)"' : '';
+    return `<tr><td class="mono">${r.time}</td><td>${mode}</td><td>${r.trades}</td><td class="yes">${r.yes}</td><td class="no">${r.no}</td><td class="mono">$${r.exposure.toFixed(2)}</td><td ${errC}>${r.errors}</td></tr>`;
+  }).join('');
+}
+
+// ---- Tabs ----
+document.querySelectorAll('.tab').forEach(t => {t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('tab-' + t.dataset.tab).classList.add('active');
 });});
 
-// Load data from JSON
+// ---- Load data ----
 function loadData() {
   fetch(DATA_URL + '?t=' + Date.now())
-    .then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => renderDashboard(data))
     .catch(err => {
-      console.error('Failed to load data:', err);
+      console.error('Load failed:', err);
       const errEl = document.getElementById('load-error');
-      if (errEl) {
-        errEl.style.display = 'block';
-        errEl.textContent = 'Failed to load data. The bot may not have published yet.';
-      }
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to load data. The bot may not have published yet.'; }
     });
 }
 
-// Initial load + auto-refresh every 5 minutes
 loadData();
 setInterval(loadData, 300000);
 </script>
