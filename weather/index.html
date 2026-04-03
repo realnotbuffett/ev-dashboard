@@ -427,15 +427,27 @@ function drawPnlChart(timeline) {
 // ---- P&L by City Bars ----
 function renderPnlCityBars(pnlByCity) {
   const el = document.getElementById('pnl-city-bars');
-  const entries = Object.entries(pnlByCity).sort((a,b) => b[1].pnl - a[1].pnl);
-  if (!entries.length) { el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No resolved trades yet</p>'; return; }
-  const maxAbs = Math.max(1, ...entries.map(([,v]) => Math.abs(v.pnl)));
-  el.innerHTML = entries.slice(0, 20).map(([city, d]) => {
+  const entries = Object.entries(pnlByCity).sort((a,b) => {
+    // Sort resolved cities by P&L, then pending cities alphabetically
+    const aRes = a[1].trades > 0; const bRes = b[1].trades > 0;
+    if (aRes && !bRes) return -1;
+    if (!aRes && bRes) return 1;
+    if (aRes && bRes) return b[1].pnl - a[1].pnl;
+    return a[0].localeCompare(b[0]);
+  });
+  if (!entries.length) { el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">No trades yet</p>'; return; }
+  const maxAbs = Math.max(1, ...entries.filter(([,v]) => v.trades > 0).map(([,v]) => Math.abs(v.pnl)));
+  el.innerHTML = entries.slice(0, 25).map(([city, d]) => {
+    if (d.trades === 0 && d.pending > 0) {
+      // City has bets but none resolved yet
+      return `<div class="pnl-bar"><div class="city-label">${city}</div><div class="bar-area"><div class="bar-val" style="color:var(--muted);left:50%">${d.pending} pending</div></div></div>`;
+    }
     const pct = Math.abs(d.pnl) / maxAbs * 45;
     const isPos = d.pnl >= 0;
     const col = isPos ? 'var(--green)' : 'var(--red)';
     const wr = d.trades > 0 ? ((d.wins/d.trades)*100).toFixed(0) : 0;
-    return `<div class="pnl-bar"><div class="city-label">${city}</div><div class="bar-area"><div class="bar-fill" style="width:${pct}%;background:${col};${isPos ? 'left:50%' : 'right:50%'}"></div><div class="bar-val" style="color:${col};${isPos ? 'left:' + (52+pct) + '%' : 'right:' + (52+pct) + '%'}">${isPos?'+':''}$${d.pnl.toFixed(2)} (${wr}%)</div></div></div>`;
+    const pendingStr = d.pending > 0 ? ` +${d.pending} pending` : '';
+    return `<div class="pnl-bar"><div class="city-label">${city}</div><div class="bar-area"><div class="bar-fill" style="width:${pct}%;background:${col};${isPos ? 'left:50%' : 'right:50%'}"></div><div class="bar-val" style="color:${col};${isPos ? 'left:' + (52+pct) + '%' : 'right:' + (52+pct) + '%'}">${isPos?'+':''}$${d.pnl.toFixed(2)} (${wr}%)${pendingStr}</div></div></div>`;
   }).join('');
 }
 
