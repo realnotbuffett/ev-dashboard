@@ -310,8 +310,8 @@ function renderDashboard(data) {
   const pnlTimeline = data.pnl_timeline || [];
   const fillStats = data.fill_stats || {};
   const runsData = data.runs || [];
-  const allActive = rows.filter(r => r.status === 'posted' || r.status === 'simulated');
-  const liveRows = rows.filter(r => r.dry_run === 'False' && r.status === 'posted');
+  const allActive = rows.filter(r => r.status === 'posted' || r.status === 'filled' || r.status === 'simulated');
+  const liveRows = rows.filter(r => r.dry_run === 'False' && (r.status === 'posted' || r.status === 'filled'));
   const hasLive = liveRows.length > 0;
 
   // Mode badge
@@ -474,7 +474,7 @@ function renderTradeTable(rows) {
   document.getElementById('trade-tbody').innerHTML = vis.map(r => {
     const e = +(r.edge || 0), ec = e>.15?'edge-high':e>.08?'edge-med':'edge-low';
     const sc = r.side==='YES'?'yes':'no';
-    const stc = r.status==='posted'?'var(--green)':r.status==='simulated'?'var(--amber)':'var(--red)';
+    const stc = (r.status==='posted'||r.status==='filled')?'var(--green)':r.status==='simulated'?'var(--amber)':'var(--red)';
     const t = r.timestamp ? new Date(r.timestamp) : null;
     const ts = t ? `${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}` : '';
     const won = r.won;
@@ -574,7 +574,7 @@ function drawScatter(trades) {
 // ---- Fill Rate ----
 function renderFillRate(data) {
   const rows = data.trades || [];
-  const livePosted = rows.filter(r => r.dry_run === 'False' && r.status === 'posted');
+  const livePosted = rows.filter(r => r.dry_run === 'False' && (r.status === 'posted' || r.status === 'filled'));
   const rejected = rows.filter(r => r.status === 'rejected_post_only');
   const totalOrders = livePosted.length + rejected.length;
 
