@@ -102,6 +102,17 @@
   .refresh-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
   .refresh-btn:hover { color: var(--text); border-color: var(--blue); }
 
+  /* Filter bar */
+  .filter-bar { display:flex; align-items:center; gap:16px; padding:12px 16px; background:var(--card); border:1px solid var(--border); border-radius:10px; margin-bottom:20px; flex-wrap:wrap; }
+  .filter-bar label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+  .filter-bar select, .filter-bar input[type="date"] { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:0.8rem; font-family:inherit; cursor:pointer; outline:none; }
+  .filter-bar select:hover, .filter-bar input[type="date"]:hover { border-color:var(--blue); }
+  .filter-bar select:focus, .filter-bar input[type="date"]:focus { border-color:var(--blue); box-shadow:0 0 0 2px rgba(59,130,246,0.15); }
+  .filter-bar .fg { display:flex; align-items:center; gap:6px; }
+  .filter-bar .reset-btn { background:none; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 12px; font-size:0.75rem; cursor:pointer; }
+  .filter-bar .reset-btn:hover { border-color:var(--blue); color:var(--text); }
+  .filter-badge { font-size:0.65rem; padding:2px 8px; border-radius:10px; background:rgba(59,130,246,0.12); color:var(--blue); font-weight:500; margin-left:auto; }
+
   .nav-links { display: flex; gap: 16px; margin-bottom: 16px; font-size: 0.8rem; }
   .nav-links a { color: var(--muted); text-decoration: none; }
   .nav-links a:hover { color: var(--text); }
@@ -137,6 +148,14 @@
       <div id="data-range"></div>
       <button class="refresh-btn" onclick="loadData()">Refresh</button>
     </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar" id="filter-bar">
+    <div class="fg"><label>City</label><select id="filter-city"><option value="">All Cities</option></select></div>
+    <div class="fg"><label>Since</label><input type="date" id="filter-since" value=""></div>
+    <button class="reset-btn" id="filter-reset">Reset</button>
+    <span class="filter-badge" id="filter-badge" style="display:none;"></span>
   </div>
 
   <div class="kpi-grid" id="kpi-grid"></div>
@@ -299,20 +318,100 @@ const ACC = [
   {c:'S\u00e3o Paulo',r:1.09,m:0.85,b:-0.11,br:0.0204},{c:'Wuhan',r:0.00,m:0.00,b:0.00,br:0.0000},
 ];
 
+let _dashData = null; // stored globally for re-render on filter change
+
+function applyFilters(rows) {
+  const cityF = document.getElementById('filter-city').value;
+  const sinceF = document.getElementById('filter-since').value;
+  let out = rows;
+  if (cityF) out = out.filter(r => r.city === cityF);
+  if (sinceF) out = out.filter(r => (r.timestamp || r.ts || '') >= sinceF);
+  return out;
+}
+
+function updateFilterBadge(count) {
+  const city = document.getElementById('filter-city').value;
+  const since = document.getElementById('filter-since').value;
+  const badge = document.getElementById('filter-badge');
+  const parts = [];
+  if (city) parts.push(city);
+  if (since) parts.push('since ' + since);
+  if (parts.length) {
+    badge.textContent = parts.join(' · ') + ' (' + count + ' trades)';
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function initFilterEvents() {
+  document.getElementById('filter-city').addEventListener('change', () => { if (_dashData) renderDashboard(_dashData); });
+  document.getElementById('filter-since').addEventListener('change', () => { if (_dashData) renderDashboard(_dashData); });
+  document.getElementById('filter-reset').addEventListener('click', () => {
+    document.getElementById('filter-city').value = '';
+    document.getElementById('filter-since').value = '';
+    if (_dashData) renderDashboard(_dashData);
+  });
+}
+
 function renderDashboard(data) {
+  _dashData = data;
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 
-  const rows = data.trades || [];
-  const pnl = data.pnl || {};
-  const pnlByCity = data.pnl_by_city || {};
-  const pnlByDate = data.pnl_by_date || {};
-  const pnlTimeline = data.pnl_timeline || [];
+  const allRows = data.trades || [];
+  const rows = applyFilters(allRows);
   const fillStats = data.fill_stats || {};
   const runsData = data.runs || [];
+
+  // Recompute P&L aggregates from filtered rows (not pre-computed JSON)
+  const resolvedForPnl = rows.filter(r => r.won !== null && r.won !== undefined);
+  const pnlByCity = {};
+  const pnlByDate = {};
+  const pnlTimeline = [];
+  let cumPnl = 0;
+
+  resolvedForPnl.forEach(r => {
+    const won = r.won === true || r.won === 'true' || r.won === 'True';
+    const pnlVal = +(r.pnl || 0);
+    const city = r.city || '?';
+    const dt = r.target_date || r.timestamp?.slice(0,10) || '?';
+
+    // By city
+    if (!pnlByCity[city]) pnlByCity[city] = {pnl:0, wins:0, losses:0, trades:0, pending:0};
+    pnlByCity[city].trades++;
+    pnlByCity[city].pnl += pnlVal;
+    if (won) pnlByCity[city].wins++; else pnlByCity[city].losses++;
+
+    // By date
+    if (!pnlByDate[dt]) pnlByDate[dt] = {pnl:0, wins:0, losses:0, trades:0};
+    pnlByDate[dt].trades++;
+    pnlByDate[dt].pnl += pnlVal;
+    if (won) pnlByDate[dt].wins++; else pnlByDate[dt].losses++;
+
+    // Timeline
+    cumPnl += pnlVal;
+    pnlTimeline.push({date: dt, pnl: pnlVal, cum_pnl: cumPnl});
+  });
+
+  // Count pending trades per city
+  const pendingRows = rows.filter(r => r.won === null || r.won === undefined);
+  pendingRows.forEach(r => {
+    const city = r.city || '?';
+    if (!pnlByCity[city]) pnlByCity[city] = {pnl:0, wins:0, losses:0, trades:0, pending:0};
+    pnlByCity[city].pending = (pnlByCity[city].pending || 0) + 1;
+  });
   const allActive = rows.filter(r => r.status === 'posted' || r.status === 'filled' || r.status === 'simulated');
   const liveRows = rows.filter(r => r.dry_run === 'False' && (r.status === 'posted' || r.status === 'filled'));
   const hasLive = liveRows.length > 0;
+
+  // Populate city filter dropdown (only on first render)
+  const citySelect = document.getElementById('filter-city');
+  if (citySelect.options.length <= 1) {
+    const cities = [...new Set(allRows.map(r => r.city))].filter(Boolean).sort();
+    cities.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; citySelect.appendChild(o); });
+  }
+  updateFilterBadge(allActive.length);
 
   // Mode badge
   const badge = document.getElementById('mode-badge');
@@ -323,16 +422,11 @@ function renderDashboard(data) {
   if (data.updated_at) {
     document.getElementById('last-update').textContent = 'Last update: ' + new Date(data.updated_at).toLocaleString();
   }
-  document.getElementById('data-range').textContent = allActive.length + ' trades across ' + (data.summary?.cities || 0) + ' cities';
+  const isFiltered = !!(document.getElementById('filter-city').value || document.getElementById('filter-since').value);
+  const nCities = [...new Set(allActive.map(r => r.city))].filter(Boolean).length;
+  document.getElementById('data-range').textContent = allActive.length + ' trades across ' + nCities + ' cities' + (isFiltered ? ' (filtered)' : '');
 
-  // ===== KPI GRID =====
-  const totalPnl = pnl.total_pnl || 0;
-  const winRate = pnl.win_rate;
-  const roi = pnl.roi;
-  const resolved = pnl.resolved || 0;
-  const pending = pnl.pending || 0;
-  const wins = pnl.wins || 0;
-  const losses = pnl.losses || 0;
+  // ===== KPI GRID (recompute from filtered rows) =====
   const totExp = allActive.reduce((s,r) => s + (+r.bet_size || 0), 0);
   const yesT = allActive.filter(r => r.side==='YES');
   const noT = allActive.filter(r => r.side==='NO');
@@ -340,11 +434,21 @@ function renderDashboard(data) {
   const avgE = edges.length ? edges.reduce((a,b)=>a+b,0)/edges.length : 0;
   const maxE = edges.length ? Math.max(...edges) : 0;
 
+  // Compute P&L from filtered rows (each row has .won and .pnl fields)
+  const resolvedRows = allActive.filter(r => r.won !== null && r.won !== undefined);
+  const wins = resolvedRows.filter(r => r.won === true || r.won === 'true' || r.won === 'True').length;
+  const losses = resolvedRows.length - wins;
+  const resolved = resolvedRows.length;
+  const pending = allActive.length - resolved;
+  const totalPnl = resolvedRows.reduce((s,r) => s + (+(r.pnl || 0)), 0);
+  const winRate = resolved > 0 ? (wins / resolved * 100) : null;
+  const roi = totExp > 0 && resolved > 0 ? (totalPnl / totExp * 100) : null;
+
   document.getElementById('kpi-grid').innerHTML = [
     {l:'Total P&L', v: (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2), c: totalPnl >= 0 ? 'green' : 'red', d: roi !== null ? `ROI: ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : 'No resolved trades'},
     {l:'Win Rate', v: winRate !== null ? winRate.toFixed(1) + '%' : '--', c: winRate !== null && winRate >= 50 ? 'green' : winRate !== null ? 'amber' : 'blue', d: `${wins}W / ${losses}L` + (pending > 0 ? ` / ${pending} pending` : '')},
     {l:'Total Trades', v: allActive.length, c: 'blue', d: `${yesT.length} YES / ${noT.length} NO` + (hasLive ? ` (${liveRows.length} live)` : '')},
-    {l:'Exposure', v: '$' + totExp.toFixed(0), c: 'cyan', d: `${(data.summary?.cities || 0)} cities`},
+    {l:'Exposure', v: '$' + totExp.toFixed(0), c: 'cyan', d: `${nCities} cities`},
     {l:'Avg Edge', v: (avgE*100).toFixed(1) + '%', c: 'purple', d: `max ${(maxE*100).toFixed(1)}%`},
     {l:'Resolved', v: resolved, c: resolved > 0 ? 'green' : 'amber', d: pending > 0 ? `${pending} pending` : 'all resolved'},
   ].map(k => `<div class="kpi"><div class="label">${k.l}</div><div class="value ${k.c}">${k.v}</div><div class="detail">${k.d}</div></div>`).join('');
@@ -702,6 +806,7 @@ function loadData() {
 }
 
 loadData();
+initFilterEvents();
 setInterval(loadData, 300000);
 </script>
 </body>
